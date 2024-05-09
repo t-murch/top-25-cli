@@ -3,6 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -27,11 +29,18 @@ var createCmd = &cobra.Command{
 	Long:  ".",
 
 	Run: func(cmd *cobra.Command, args []string) {
-		p := tea.NewProgram(initialModel())
-		if _, err := p.Run(); err != nil {
-			fmt.Printf("Oh poop, we have an Error: %v", err)
-			os.Exit(1)
-		}
+		services.ServerStartCmd()
+		services.GrantAuthForUser("facebook")
+		// p := tea.NewProgram(initialModel())
+		// if _, err := p.Run(); err != nil {
+		// 	fmt.Printf("Oh poop, we have an Error: %v", err)
+		// 	os.Exit(1)
+		// }
+
+		// Wait for termination signal (Ctrl+C)
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, os.Interrupt, syscall.SIGTERM)
+		<-sigint
 	},
 }
 
@@ -44,7 +53,8 @@ type model struct {
 func initialModel() model {
 	return model{
 		// Our to-do list is a grocery list
-		choices: []string{"Buy carrots", "Buy celery", "Buy kohlrabi", "Grant User Auth"},
+		// choices: []string{"Buy carrots", "Buy celery", "Buy kohlrabi", "Grant User Auth"},
+		choices: []string{"Grant User Auth"},
 
 		// A map which indicates which choices are selected. We're using
 		// the  map like a mathematical set. The keys refer to the indexes

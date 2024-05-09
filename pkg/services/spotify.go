@@ -47,6 +47,7 @@ func GrantAuthForUser(strategy string) {
 	if _, err = page.Goto(buildAccessCodeRequest()); err != nil {
 		log.Fatalf("could not goto: %v \n", err)
 	}
+	// page.Pause()
 
 	/**
 				* AUTH OPTIONS
@@ -65,6 +66,9 @@ func GrantAuthForUser(strategy string) {
 	if err = page.GetByTestId("facebook-login").Click(); err != nil {
 		log.Fatalf("could not goto: %v \n", err)
 	}
+	if err := page.WaitForURL("https://www.facebook.com/login**"); err != nil {
+		log.Fatalf("Failed to navigate to facebook auth page. Error: %v", err)
+	}
 
 	// page.Pause()
 
@@ -82,24 +86,23 @@ func GrantAuthForUser(strategy string) {
 		loginField.Fill(username)
 		passwordField.Fill(password)
 
+		myTimeout := float64(10)
 		page.Locator("#loginbutton").Click()
+		if err := page.WaitForURL("http://localhost:8080/cli/callback", playwright.PageWaitForURLOptions{Timeout: &myTimeout}); err != nil {
+			log.Fatalf("Failed to login. Check username and password. Error: %v \n", err)
+		}
 
-		log.Print("Input login details and hit enter successfully. ")
+		submitBtn, err := page.Locator("loginbutton").Count()
+		if err != nil {
+			log.Fatalf("error logging in. Error: %v \n", err)
+		}
+
+		if submitBtn < 1 {
+			log.Print("Input login details and hit enter successfully. ")
+		}
 	}
 
-	// entries, err := page.Locator(".athing").All()
-	// if err != nil {
-	// 	log.Fatalf("could not get entries: %v", err)
-	// }
-
-	// for i, entry := range entries {
-	// 	title, err := entry.Locator("td.title > span > a").TextContent()
-	// 	if err != nil {
-	// 		log.Fatalf("could not get text content: %v", err)
-	// 	}
-	// 	fmt.Printf("%d: %s\n", i+1, title)
-	// }
-
+	// page.Pause()
 	if err = browser.Close(); err != nil {
 		log.Fatalf("could not close browser: %v", err)
 	}
@@ -110,9 +113,15 @@ func GrantAuthForUser(strategy string) {
 }
 
 func buildAccessCodeRequest() string {
+	myRandomString, err := GenerateRandomString(16)
+	if err != nil {
+		log.Fatal("Failed to generate random string. wtf... \n")
+	}
+
 	data := url.Values{}
 	data.Set("client_id", os.Getenv("SPOT_CLIENT_ID"))
 	data.Set("response_type", "code")
+	data.Set("state", myRandomString)
 	// data.Set("client_secret", os.Getenv("SPOT_CLIENT_SECRET"))
 	// TODO: Change this once working.
 	data.Set("redirect_uri", "http://localhost:8080/cli/callback")
@@ -121,7 +130,7 @@ func buildAccessCodeRequest() string {
 
 	tokenUrl := AUTH_URL
 
-	fmt.Printf("auth url: %v", tokenUrl+"?"+data.Encode())
+	fmt.Printf("auth url: %v\n", tokenUrl+"?"+data.Encode())
 	return tokenUrl + "?" + data.Encode()
 }
 
