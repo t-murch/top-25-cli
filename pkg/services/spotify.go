@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/playwright-community/playwright-go"
+	"github.com/t-murch/top-25-cli/pkg/common"
 )
 
 var (
@@ -28,7 +29,7 @@ var (
 *   $(TOP_25_CLI_PASSWORD)
 * */
 
-func GrantAuthForUser(strategy string) {
+func GrantAuthForUser(channels *common.Channels, strategy string) {
 	pw, err := playwright.Run()
 	if err != nil {
 		log.Fatalf("Failed to launch Playwright: %v \n", err)
@@ -44,10 +45,50 @@ func GrantAuthForUser(strategy string) {
 		log.Fatalf("could not create page: %v \n", err)
 	}
 
-	if _, err = page.Goto(buildAccessCodeRequest()); err != nil {
-		log.Fatalf("could not goto: %v \n", err)
+	preAuthRequestUrl := buildAccessCodeRequest()
+	preAuthResponse, err := page.Goto(preAuthRequestUrl)
+	if err != nil || preAuthResponse.Status() > 399 {
+		log.Fatalf("could not goto: %v, status: %d, error: %v \n", preAuthRequestUrl, preAuthResponse.Status(), err)
+		// I dont think I need to initialize data in the tokenCache in error state.
+		stateIdentifier := parseAccessRequestParams(preAuthRequestUrl, "state")
+		errMsgOrStatus := fmt.Sprint(preAuthResponse.Status())
+		if err != nil {
+			errMsgOrStatus = err.Error()
+		}
+
+		channels.PreAuthChannel <- common.PreAuthDetails{
+			Code:      "",
+			State:     stateIdentifier,
+			ErrorInfo: errMsgOrStatus,
+			HasError:  true,
+		}
+	} else {
+		stateIdentifier := parseAccessRequestParams(preAuthRequestUrl, "state")
+		channels.PreAuthChannel <- common.PreAuthDetails{
+			Code:      "",
+			State:     stateIdentifier,
+			ErrorInfo: "",
+			HasError:  false,
+		}
+		// channels.TokenStateChannel <- common.TokenState{
+		// 	State:     stateIdentifier,
+		// 	ErrorInfo: "",
+		// 	Details:   common.AuthDetails{},
+		// 	HasError:  false,
+		// }
+		// log.Printf("initialized new babyTokenCache key: %s \n", stateIdentifier)
 	}
+
 	// page.Pause()
+	/*
+			* Workflow:
+			* - Go to url of `buildAccessCodeRequest()`
+		*  - Select Auth Strategy
+		*  - Login to that strategy
+		*  - Redirect back to Spotify PreAuth Page
+		*  - Click `Agree`
+		*  - Await call to `/cli/callback` for code && state values
+			* */
 
 	/**
 				* AUTH OPTIONS
@@ -86,9 +127,17 @@ func GrantAuthForUser(strategy string) {
 		loginField.Fill(username)
 		passwordField.Fill(password)
 
-		myTimeout := float64(10)
+		// preAuthRedirectTimeout := float64(10)
 		page.Locator("#loginbutton").Click()
-		if err := page.WaitForURL("http://localhost:8080/cli/callback", playwright.PageWaitForURLOptions{Timeout: &myTimeout}); err != nil {
+		// page.Pause()
+		// https://accounts.spotify.com/en/authorize?client_id=035b4603779340a785097df893e33728&redirect_uri=http%3A%2F%2Flocalhost%3A8080%2Fcli%2Fcallback&response_type=code&show_dialog=true&state=6ARzqcK_Vua3g89F3TaR_g%3D%3D
+		if err := page.WaitForURL("https://accounts.spotify.com/en/authorize?**"); err != nil {
+			log.Fatalf("Failed to redirect back to PreAuth for Acceptance. Error: %v \n", err)
+		}
+
+		// callbackTimeout := float64(10)
+		page.GetByTestId("auth-accept").Click()
+		if err := page.WaitForURL("http://localhost:8080/cli/callback**"); err != nil {
 			log.Fatalf("Failed to login. Check username and password. Error: %v \n", err)
 		}
 
@@ -132,6 +181,25 @@ func buildAccessCodeRequest() string {
 
 	fmt.Printf("auth url: %v\n", tokenUrl+"?"+data.Encode())
 	return tokenUrl + "?" + data.Encode()
+}
+
+func parseAccessRequestParams(fullUrl string, param string) string {
+	parsedUrl, err := url.Parse(fullUrl)
+	if err != nil {
+		log.Fatalf("failed to parse our own url. should not happennnnn. err: %v \n", err)
+	}
+
+	allParams := parsedUrl.Query()
+
+	if hasParam := allParams.Has(param); !hasParam {
+		log.Fatalf("param: %s not found in url: %s \n", param, parsedUrl)
+	}
+
+	if stateParams := allParams[param]; len(stateParams) > 1 {
+		log.Fatalf("unable to parse param: %s. Multiple values. url: %s \n", param, parsedUrl)
+	}
+
+	return allParams.Get(param)
 }
 
 func GenerateRandomBytes(num int) ([]byte, error) {

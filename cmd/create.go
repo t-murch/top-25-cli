@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
+	"github.com/t-murch/top-25-cli/pkg/common"
 	"github.com/t-murch/top-25-cli/pkg/services"
 )
 
@@ -29,8 +30,10 @@ var createCmd = &cobra.Command{
 	Long:  ".",
 
 	Run: func(cmd *cobra.Command, args []string) {
-		services.ServerStartCmd()
-		services.GrantAuthForUser("facebook")
+		channels := common.NewChannels()
+
+		services.ServerStartCmd(channels)
+		services.GrantAuthForUser(channels, "facebook")
 		// p := tea.NewProgram(initialModel())
 		// if _, err := p.Run(); err != nil {
 		// 	fmt.Printf("Oh poop, we have an Error: %v", err)
@@ -103,7 +106,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			if m.cursor == 3 {
-				services.GrantAuthForUser("facebook")
+				services.GrantAuthForUser(common.NewChannels(), "facebook")
 			}
 		}
 	}
