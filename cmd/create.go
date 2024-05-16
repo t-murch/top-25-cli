@@ -10,18 +10,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 	"github.com/t-murch/top-25-cli/pkg/common"
-	"github.com/t-murch/top-25-cli/pkg/services"
 )
 
-var (
-	logoStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#01FAC6")).Bold(true)
-	tipMsgStyle    = lipgloss.NewStyle().PaddingLeft(1).Foreground(lipgloss.Color("#190")).Italic(true)
-	endingMsgStyle = lipgloss.NewStyle().Padding(1).Foreground(lipgloss.Color("170")).Bold(true)
-)
-
+/* COBRA */
 func init() {
 	rootCmd.AddCommand(createCmd)
-	// rootCmd.AddCommand(services.GrantAuthForUser())
 }
 
 var createCmd = &cobra.Command{
@@ -30,15 +23,12 @@ var createCmd = &cobra.Command{
 	Long:  ".",
 
 	Run: func(cmd *cobra.Command, args []string) {
-		channels := common.NewChannels()
-
-		services.ServerStartCmd(channels)
-		services.GrantAuthForUser(channels, "facebook")
+		p := tea.NewProgram(newMainModel())
 		// p := tea.NewProgram(initialModel())
-		// if _, err := p.Run(); err != nil {
-		// 	fmt.Printf("Oh poop, we have an Error: %v", err)
-		// 	os.Exit(1)
-		// }
+		if _, err := p.Run(); err != nil {
+			fmt.Printf("Oh poop, we have an Error: %v", err)
+			os.Exit(1)
+		}
 
 		// Wait for termination signal (Ctrl+C)
 		sigint := make(chan os.Signal, 1)
@@ -47,110 +37,136 @@ var createCmd = &cobra.Command{
 	},
 }
 
-type model struct {
-	selected map[int]struct{}
-	choices  []string
-	cursor   int
+/* BUBBLETEA */
+var (
+	logoStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#01FAC6")).Bold(true)
+	tipMsgStyle    = lipgloss.NewStyle().PaddingLeft(1).Foreground(lipgloss.Color("#190")).Italic(true)
+	endingMsgStyle = lipgloss.NewStyle().Padding(1).Foreground(lipgloss.Color("170")).Bold(true)
+)
+
+type sessionState int
+
+const (
+	welcomeView sessionState = iota
+	scopeView
+	loginView
+	playlistsView
+)
+
+type AppPage int
+
+const (
+	WelcomePage   AppPage = 0
+	ScopePage     AppPage = 1
+	LoginPage     AppPage = 2
+	PlaylistsPage AppPage = 3
+)
+
+type GoTo struct {
+	Page AppPage
 }
 
-func initialModel() model {
-	return model{
-		// Our to-do list is a grocery list
-		// choices: []string{"Buy carrots", "Buy celery", "Buy kohlrabi", "Grant User Auth"},
-		choices: []string{"Grant User Auth"},
-
-		// A map which indicates which choices are selected. We're using
-		// the  map like a mathematical set. The keys refer to the indexes
-		// of the `choices` slice, above.
-		selected: make(map[int]struct{}),
+func GoNext(page AppPage) tea.Cmd {
+	return func() tea.Msg {
+		return GoTo{Page: page}
 	}
 }
 
-func (m model) Init() tea.Cmd {
+func GoBack(page AppPage) tea.Cmd {
+	return func() tea.Msg {
+		return GoTo{Page: page}
+	}
+}
+
+type MainModel struct {
+	User   *common.User
+	scopes ScopesModel
+	login  LoginModel
+	state  sessionState
+	width  int
+	height int
+}
+
+type (
+	errMsg error
+)
+
+func newMainModel() *MainModel {
+	return &MainModel{
+		state:  welcomeView,
+		scopes: newScopesModel(),
+		login:  newLoginModel(),
+		User:   common.NewUser(),
+	}
+}
+
+func (m MainModel) Init() tea.Cmd {
 	// Just return `nil`, which means "no I/O right now, please."
 	return nil
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
-	// Is it a key press?
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+
+		switch m.state {
+		case welcomeView:
+		// m.welcome.Update(msg)
+		case scopeView:
+		// m.scope.Update(msg)
+		case loginView:
+			_, cmd := m.login.Update(msg)
+			cmds = append(cmds, cmd)
+		}
+
+	case GoTo:
+		m.state = sessionState(msg.Page)
+
 	case tea.KeyMsg:
-
-		// Cool, what was the actual key pressed?
 		switch msg.String() {
-
-		// These keys should exit the program.
-		case "ctrl+c", "q":
+		case "ctrl+c":
 			return m, tea.Quit
-
-		// The "up" and "k" keys move the cursor up
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-
-		// The "down" and "j" keys move the cursor down
-		case "down", "j":
-			if m.cursor < len(m.choices)-1 {
-				m.cursor++
-			}
-
-		// The "enter" key and the spacebar (a literal space) toggle
-		// the selected state for the item that the cursor is pointing at.
-		case "enter", " ":
-			_, ok := m.selected[m.cursor]
-			if ok {
-				delete(m.selected, m.cursor)
-			} else {
-				m.selected[m.cursor] = struct{}{}
-			}
-
-			if m.cursor == 3 {
-				services.GrantAuthForUser(common.NewChannels(), "facebook")
-			}
 		}
+
+		//
+		// case errMsg:
+		// 	m.err = msg
+		// 	return m, nil
 	}
 
-	// Return the updated model to the Bubble Tea runtime for processing.
-	// Note that we're not returning a command.
-	return m, nil
-}
-
-func (m model) View() string {
-	// The header
-	s := "What should we buy at the market?\n\n"
-
-	// Iterate over our choices
-	for i, choice := range m.choices {
-
-		// Is the cursor pointing at this choice?
-		cursor := " " // no cursor
-		if m.cursor == i {
-			cursor = ">" // cursor!
-		}
-
-		// Is this choice selected?
-		checked := " " // not selected
-		if _, ok := m.selected[i]; ok {
-			checked = "x" // selected!
-		}
-
-		// Render the row
-		s += fmt.Sprintf("%s [%s] %s\n", logoStyle.Render(cursor), logoStyle.Render(checked), logoStyle.Render(choice))
+	switch m.state {
+	case welcomeView:
+		wv := greetingModel()
+		_, cmd := wv.Update(msg)
+		cmds = append(cmds, cmd)
+	case scopeView:
+		// sv := newScopesModel()
+		// _, cmd := sv.Update(msg)
+		_, cmd := m.scopes.Update(msg)
+		cmds = append(cmds, cmd)
+	case loginView:
+		_, cmd := m.login.Update(msg)
+		cmds = append(cmds, cmd)
 	}
 
-	// The footer
-	s += "\nPress q to quit.\n"
-
-	// Send the UI for rendering
-	return s
+	return m, tea.Batch(cmds...)
 }
 
-// type listOptions struct {
-// 	options []string
-// }
-//
-// type Options struct {
-// 	ProjectName string
-// 	ProjectType string
-// }
+func (m MainModel) View() string {
+	var currentView string
+
+	switch m.state {
+	case welcomeView:
+		currentView = greetingModel().View()
+	case scopeView:
+		currentView = m.scopes.View()
+	case loginView:
+		currentView = m.login.View()
+	}
+
+	return currentView
+}
