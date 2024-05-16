@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,6 +24,18 @@ var createCmd = &cobra.Command{
 	Long:  ".",
 
 	Run: func(cmd *cobra.Command, args []string) {
+		if f, err := tea.LogToFile("debug.log", "help"); err != nil {
+			fmt.Println("Couldn't open a file for logging:", err)
+			os.Exit(1)
+		} else {
+			defer func() {
+				err = f.Close()
+				if err != nil {
+					log.Fatal(err)
+				}
+			}()
+		}
+
 		p := tea.NewProgram(newMainModel())
 		// p := tea.NewProgram(initialModel())
 		if _, err := p.Run(); err != nil {
