@@ -29,7 +29,7 @@ var (
 *   $(TOP_25_CLI_PASSWORD)
 * */
 
-func GrantAuthForUser(channels *common.Channels, strategy string) {
+func GrantAuthForUser(channels *common.Channels, strategy string, username string, password string) {
 	pw, err := playwright.Run()
 	if err != nil {
 		log.Fatalf("Failed to launch Playwright: %v \n", err)

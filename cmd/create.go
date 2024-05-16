@@ -100,6 +100,30 @@ type MainModel struct {
 	height int
 }
 
+func SetUserProperty(user *common.User, value interface{}) *common.User {
+	switch value := value.(type) {
+	case string:
+		if len(user.Username) == 0 && user.Username != value {
+			user.Username = value
+		}
+	case bool:
+		user.HasAuth = value
+	case common.AuthDetails:
+		user.SetAuthDetails(value)
+		log.Println("new user: ", user)
+	}
+
+	return user
+}
+
+func UpdateUserName(v string) tea.Cmd {
+	log.Println("UpdateUserName: ", v)
+	// this returns a value from the User struct
+	return func() tea.Msg {
+		return common.UserName{Username: v}
+	}
+}
+
 type (
 	errMsg error
 )
@@ -138,6 +162,9 @@ func (m *MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case GoTo:
 		m.state = sessionState(msg.Page)
+
+	case common.UserName:
+		m.User = SetUserProperty(m.User, msg.Username)
 
 	case tea.KeyMsg:
 		switch msg.String() {

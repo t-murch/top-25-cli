@@ -6,6 +6,14 @@ type User struct {
 	HasAuth     bool
 }
 
+// type UserUpdateValue interface {
+// 	string | bool | AuthDetails
+// }
+
+type UserName struct {
+	Username string
+}
+
 func NewUser() *User {
 	return &User{}
 }

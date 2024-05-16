@@ -74,10 +74,12 @@ func (m LoginModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	}
 
-	// if m.options.State == huh.StateCompleted {
-	// 	// Quit when the form is done.
-	// 	cmds = append(cmds, tea.Quit)
-	// }
+	if m.options.State == huh.StateCompleted {
+		username := m.options.GetString("username")
+		cmds = append(cmds, UpdateUserName(username))
+		// Quit when the form is done.
+		// cmds = append(cmds, tea.Quit)
+	}
 
 	return m, tea.Batch(cmds...)
 }
